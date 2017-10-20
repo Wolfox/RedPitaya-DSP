@@ -265,9 +265,24 @@ int execTestTimer(double timeInt) {
         } while (deltaT  <= nextTime);
 
         signalChg9();
-
+make
         nextTime += timeInt;
 
+    } while(deltaT < MAXTESTTIME);
+
+    return 0;
+}
+
+int execTestTimer1(int microSecTime) {
+
+    printf("set time\n");
+    startTime();
+    double deltaT;
+
+    do {
+        deltaT = getTimeSinceStart();
+        signalChg9();
+        usleep(microSecTime);
     } while(deltaT < MAXTESTTIME);
 
     return 0;
