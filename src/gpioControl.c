@@ -1,3 +1,22 @@
+/*
+* Copyright (C) 2017-2018 Tiago Susano Pinto <tiagosusanopinto@gmail.com>
+*
+* This file is part of RedPitaya-DSP.
+*
+* RedPitaya-DSP is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* RedPitaya-DSP is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with RedPitaya-DSP. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include "gpioControl.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,6 +100,12 @@ void initPinFunct() {
     }
 }
 
+int exitGPIO() {
+    *(gpio+GPIO_OUTPUT_CLEAR_0) = 0xffffffff;
+    *(gpio+GPIO_OUTPUT_CLEAR_1) = 0x003fffff;
+    return 0;
+}
+
 void signal9(int i) { //send signal in pin 9 if i != 0, else clear it
     if(i != 0) {
         //To set a signal to pin 9, must change the 9th bit to 1 in the address +7
@@ -133,7 +158,7 @@ void setSignal9(int i, volatile uint32_t **addr, uint32_t *val) {
 void setSignal(int pin, int act, volatile uint32_t **addr, uint32_t *val) {
 
     int GPIOoffset = 0;
-    
+
     if(act < 0){
         pinsFunc[pin] = 'I'; //Input
         GPIOoffset = GPIO_LEVEL_0;

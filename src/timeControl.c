@@ -1,5 +1,22 @@
-#include "timeControl.h"
-#include <time.h>
+/*
+* Copyright (C) 2017-2018 Tiago Susano Pinto <tiagosusanopinto@gmail.com>
+*
+* This file is part of RedPitaya-DSP.
+*
+* RedPitaya-DSP is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* RedPitaya-DSP is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with RedPitaya-DSP. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/mman.h>
@@ -7,11 +24,13 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "timeControl.h"
 
 #define BLOCK_SIZE (4*1024)
 
 // clock access
 volatile uint32_t *ARMControl;
+volatile uint32_t *clock32;
 volatile uint64_t *ARMTimer;
 
 uint64_t startTime;
@@ -28,54 +47,36 @@ double getNSecPerTick() {
     return BILLION/PROC_FREQ;
 }
 
-uint64_t turnNSecToTicks(unsigned long long int nSec) {
-    return (uint64_t) (nSec/getNSecPerTick());
-}
-
 int initARMTimer() {
 
-    int  mem_fd = open("/dev/mem", O_RDWR|O_SYNC); // open /dev/mem
-    if (mem_fd < 0) {
+    int  memoryFileDescriptor = open("/dev/mem", O_RDWR|O_SYNC);
+    if (memoryFileDescriptor < 0) {
         printf("can't open /dev/mem (errno %d) \n", errno);
         return 1;
     }
 
     /* mmap ARM Timer */
     ARMControl = mmap(
-        NULL,                   //Any adddress in our space will do
-        BLOCK_SIZE,             //Map length
+        NULL,
+        BLOCK_SIZE,             // Map length
         PROT_READ|PROT_WRITE,   // Enable reading & writting to mapped memory
-        MAP_SHARED,             //Shared with other processes
-        mem_fd,                 //File to map
-        ARM_QA7_CONTROL_REG     //Offset to ARM control logic
-        );
+        MAP_SHARED,             // Shared with other processes
+        memoryFileDescriptor,   // File to map
+        ARM_QA7_CONTROL_REG     // Offset to ARM control logic
+    );
 
-    close(mem_fd); //No need to keep mem_fd open after mmap
+    close(memoryFileDescriptor);
 
     if (ARMControl == MAP_FAILED) {
-        printf("mmap(0x%08x) failed (errno %d)\n", (uint32_t)ARM_QA7_CONTROL_REG, errno);
+        printf("mmap(0x%08x) failed (errno %d)\n",
+            (uint32_t)ARM_QA7_CONTROL_REG, errno);
         return 1;
     }
 
+    currentTime = 0;
+    clock32 = (volatile uint32_t *)&currentTime;
     ARMTimer = (uint64_t *)&ARMControl[ARM_TIMER_OFFSET]; //
     scanTime = (uint32_t *)&currTime;
-
-    
-    /*uint32_t lsbTimer = *(ARMTimer+7);
-    uint32_t msbTimer = *(ARMTimer+8);
-    printf("test0 %08x %08x\n", lsbTimer, msbTimer);
-
-    lsbTimer = *(ARMTimer+7);
-    sleep(300);
-    msbTimer = *(ARMTimer+8);
-    printf("test1 %08x %08x\n", lsbTimer, msbTimer);
-
-    lsbTimer = *(ARMTimer+7);
-    msbTimer = *(ARMTimer+8);
-    printf("test2 %08x %08x\n", lsbTimer, msbTimer);
-
-    testARMTimer();*/
-
 
     return 0;
 }
@@ -111,10 +112,15 @@ void startARMTimer() {
     startTime = currTime;
 }
 
-inline void updateARMTimer() {
+void updateARMTimer() {
     do {
-        currTime = *(ARMTimer);
-    } while (*(scanTime) == 0xFFFFFFFF);
+        clock32[1] = *(volatile uint32_t *) ARMControl[CLOCK_MSB];
+        clock32[0] = *(volatile uint32_t *) ARMControl[CLOCK_LSB];
+    } while (*(volatile uint32_t *) ARMControl[CLOCK_MSB] != clock32[1]);
+}
+
+uint64_t turnNSecToTicks(unsigned long long int nSec) {
+    return (uint64_t) (nSec/getNSecPerTick());
 }
 
 /*void getARMTimer(uint64_t *utime) {

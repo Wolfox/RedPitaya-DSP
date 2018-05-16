@@ -22,9 +22,9 @@ OS=http://clade.pierre.free.fr/python-on-red-pitaya/ecosystem-0.92-0-devbuild.zi
 CC=$(PREFIX)gcc
 
 PYTHONLIBS=build/usr/lib/Python2.7
-PYTHONPACKAGES=PyRedPitaya Pyro4==4.28 serpent
+PYTHONPACKAGES= Pyro4==4.28 serpent
 
-all: dsp server rpos pythonpackages
+all: dsp-test server rpos pythonpackages
 
 objs:
 	mkdir objs
@@ -35,22 +35,7 @@ tmp:
 build:
 	mkdir build
 
-objs/dsp.o: src/dsp.c objs
-	$(CC) $(CFLAGS) -c $< -o $@
-
 objs/dsp-test.o: src/dsp_test.c objs
-	$(CC) $(CFLAGS) -c $< -o $@
-
-objs/primeNums.o: src/primeNums.c objs
-	$(CC) $(CFLAGS) -c $< -o $@
-
-objs/fpga_awg.o: src/fpga_awg.c include/fpga_awg.h objs
-	$(CC) $(CFLAGS) -c $< -o $@
-
-objs/rpouts.o: src/rpouts.c include/rpouts.h objs
-	$(CC) $(CFLAGS) -c $< -o $@
-
-objs/timer.o: src/timer.c include/timer.h include/xparameters.h objs
 	$(CC) $(CFLAGS) -c $< -o $@
 
 objs/gpioControl.o: src/gpioControl.c include/gpioControl.h
@@ -62,15 +47,7 @@ objs/timeControl.o: src/timeControl.c include/timeControl.h
 objs/actionTable.o: src/actionTable.c include/actionTable.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-dsp: objs/dsp.o objs/timer.o objs/rpouts.o objs/fpga_awg.o
-	mkdir -p build/bin
-	$(CC) $(CFLAGS) -o build/bin/$@ $^
-
 dsp-test: objs/dsp-test.o objs/gpioControl.o objs/timeControl.o objs/actionTable.o
-	mkdir -p build/bin
-	$(CC) $(CFLAGS) -o build/bin/$@ $^
-
-primeNums: objs/primeNums.o
 	mkdir -p build/bin
 	$(CC) $(CFLAGS) -o build/bin/$@ $^
 
