@@ -25,7 +25,7 @@ CC=$(PREFIX)gcc
 PYTHONLIBS=build/usr/lib/Python2.7
 PYTHONPACKAGES= Pyro4==4.28 serpent
 
-all: dsp-test server rpos pythonpackages
+all: atm server rpos pythonpackages
 
 objs:
 	mkdir objs
@@ -36,7 +36,7 @@ tmp:
 build:
 	mkdir build
 
-objs/dsp-test.o: src/dsp_test.c objs
+objs/atm.o: src/atm.c objs
 	$(CC) $(CFLAGS) -c $< -o $@
 
 objs/gpioControl.o: src/gpioControl.c include/gpioControl.h
@@ -48,7 +48,7 @@ objs/timeControl.o: src/timeControl.c include/timeControl.h
 objs/actionTable.o: src/actionTable.c include/actionTable.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-dsp-test: objs/dsp-test.o objs/gpioControl.o objs/timeControl.o objs/actionTable.o
+atm: objs/atm.o objs/gpioControl.o objs/timeControl.o objs/actionTable.o
 	mkdir -p build/bin
 	$(CC) $(CFLAGS) -o build/bin/$@ $^
 
@@ -70,7 +70,7 @@ atest: Atest.c
 	$(CC) $(CFLAGS) -O0 Atest.c fpga_awg.c -lm -o atest $(LNK)
 
 scp:
-	scp build/bin/server build/bin/dsp root@$(IP):/tmp/
+	scp build/bin/server build/bin/atm root@$(IP):/tmp/
 
 clean:
-	rm -rf dsp atest *.o include/*.o libxil.so *.a objs/ bin/ build/
+	rm -rf atm atest *.o include/*.o libxil.so *.a objs/ bin/ build/

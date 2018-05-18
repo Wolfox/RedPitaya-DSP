@@ -30,5 +30,3 @@ uint64_t currentTime;
 int initARMTimer();
 void updateARMTimer();
 uint64_t turnNSecToTicks(unsigned long long int nSec);
-
-void testARMTimer();

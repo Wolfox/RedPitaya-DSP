@@ -39,7 +39,7 @@ volatile uint32_t *ARMTimer;
 /******************************************************************************/
 
 int initARMTimer() {
-    int  memoryFileDescriptor = open("/dev/mem", O_RDWR|O_SYNC);
+    int memoryFileDescriptor = open("/dev/mem", O_RDWR|O_SYNC);
     if (memoryFileDescriptor < 0) {
         printf("can't open /dev/mem (errno %d) \n", errno);
         return 1;
@@ -65,20 +65,6 @@ int initARMTimer() {
     ARMTimer = (volatile uint32_t *)&currentTime;
 
     return 0;
-}
-
-void testARMTimer() {
-    uint64_t previousTime = 0;
-    while(1) {
-        updateARMTimer();
-        if(currentTime < previousTime) {
-            printf("UPPSY DAISY!\n");
-            printf("prev: %llu\n",(long long unsigned int) previousTime);
-            printf("curr: %llu\n",(long long unsigned int) currentTime);
-            return;
-        }
-        previousTime = currentTime;
-    }
 }
 
 void updateARMTimer() {
