@@ -26,29 +26,19 @@
 
 #include "timeControl.h"
 
+#define BILLION 1000000000 // nano seconds in a second
 #define BLOCK_SIZE (4*1024)
+
+// nSec per clock tick
+const long double nSecPerTick = BILLION/(long double)PROC_FREQ;
 
 // clock access
 volatile uint32_t *ARMControl;
-volatile uint32_t *clock32;
-volatile uint64_t *ARMTimer;
+volatile uint32_t *ARMTimer;
 
-uint64_t startTime;
-uint64_t nextTime;
-uint64_t currTime;
-
-uint32_t *scanTime;
-
-void testARMTimer();
-inline void updateARMTimer();
-
-
-double getNSecPerTick() {
-    return BILLION/PROC_FREQ;
-}
+/******************************************************************************/
 
 int initARMTimer() {
-
     int  memoryFileDescriptor = open("/dev/mem", O_RDWR|O_SYNC);
     if (memoryFileDescriptor < 0) {
         printf("can't open /dev/mem (errno %d) \n", errno);
@@ -64,7 +54,6 @@ int initARMTimer() {
         memoryFileDescriptor,   // File to map
         ARM_QA7_CONTROL_REG     // Offset to ARM control logic
     );
-
     close(memoryFileDescriptor);
 
     if (ARMControl == MAP_FAILED) {
@@ -72,100 +61,47 @@ int initARMTimer() {
             (uint32_t)ARM_QA7_CONTROL_REG, errno);
         return 1;
     }
-
     currentTime = 0;
-    clock32 = (volatile uint32_t *)&currentTime;
-    ARMTimer = (uint64_t *)&ARMControl[ARM_TIMER_OFFSET]; //
-    scanTime = (uint32_t *)&currTime;
+    ARMTimer = (volatile uint32_t *)&currentTime;
 
     return 0;
 }
 
 void testARMTimer() {
-    uint64_t previousVal = 0;
-    uint64_t currentVal = 0;
-
+    uint64_t previousTime = 0;
     while(1) {
         updateARMTimer();
-        currentVal = currTime;
-        if(currentVal < previousVal) {
+        if(currentTime < previousTime) {
             printf("UPPSY DAISY!\n");
-            printf("prev: %llu\n",(long long unsigned int) previousVal);
-            printf("curr: %llu\n",(long long unsigned int) currentVal);
+            printf("prev: %llu\n",(long long unsigned int) previousTime);
+            printf("curr: %llu\n",(long long unsigned int) currentTime);
             return;
         }
-        previousVal = currentVal;
+        previousTime = currentTime;
     }
-
-}
-
-/*void resetTestTime() {
-    lsbARMTimer = 0;
-    msbARMTimer = (*(ARMTimer+CLOCK_MSB) + 1);
-    *(ARMTimer+CLOCK_LSB) = lsbARMTimer;
-    *(ARMTimer+CLOCK_MSB) = msbARMTimer;
-}*/
-
-void startARMTimer() {
-    //startTime = *(ARMTimer);
-    updateARMTimer();
-    startTime = currTime;
 }
 
 void updateARMTimer() {
+    /*
+    When reading the current 32 LS bit of the 64 timer, returns it and
+    triggers storing a copy of the MS 32 bits
+
+    When reading the current 32 MS bit of the 64 timer, returns the
+    status of the core timer-read-hold register.
+    That register is loaded when the user does a read of the LS-32 timer bits.
+    There is little sense in reading this register without first doing a read
+    from the LS-32 bit register.
+    */
+    ARMTimer[0] = ARMControl[CLOCK_LSB];
+    ARMTimer[1] = ARMControl[CLOCK_MSB];
+    /* Otherwise use
     do {
-        clock32[1] = *(volatile uint32_t *) ARMControl[CLOCK_MSB];
-        clock32[0] = *(volatile uint32_t *) ARMControl[CLOCK_LSB];
-    } while (*(volatile uint32_t *) ARMControl[CLOCK_MSB] != clock32[1]);
+        ARMTimer[1] = *(volatile uint32_t *) ARMControl[CLOCK_MSB];
+        ARMTimer[0] = *(volatile uint32_t *) ARMControl[CLOCK_LSB];
+    } while (*(volatile uint32_t *) ARMControl[CLOCK_MSB] != ARMTimer[1]);
+    */
 }
 
 uint64_t turnNSecToTicks(unsigned long long int nSec) {
-    return (uint64_t) (nSec/getNSecPerTick());
-}
-
-/*void getARMTimer(uint64_t *utime) {
-   *utime = *(ARMTimer);
-}*/
-
-void setNextTime(uint64_t nTime) {
-    nextTime = startTime+nTime;
-    // lsbNextTime = lsbTime;
-    // msbNextTime = msbTime;
-}
-
-int isARMTimerLessThanNext() { //return 1 if now < next
-    updateARMTimer();
-    return currTime < nextTime;
-    // return *(ARMTimer) < nextTime;
-    // if(msbARMTimer != msbNextTime) {
-    //     return (msbARMTimer < msbNextTime);
-    // }
-    // return lsbARMTimer < lsbNextTime;
-}
-
-void waitForNext() {
-    //while(*(ARMTimer) < nextTime) { }
-    updateARMTimer();
-    while(currTime < nextTime) {
-        updateARMTimer();
-    }
-}
-
-uint64_t getCurrentTime() {
-    return currTime;
-}
-
-
-void printARMControl() {
-    printf("ARM Control register %08i\n", (uint32_t)*(ARMControl));
-}
-
-void printARMTime() {
-    updateARMTimer();
-    // uint64_t nowTime = *(ARMTimer);
-    uint64_t nowTime = currTime;
-    double nSec2TckRatio = getNSecPerTick();
-    printf("start :%li  %li\n", (long int)startTime, (long int)(startTime*nSec2TckRatio) );
-    printf("now   :%li  %li\n", (long int)nowTime, (long int)(nowTime*nSec2TckRatio) );
-    printf("next  :%li  %li\n", (long int)nextTime, (long int)(nextTime*nSec2TckRatio) );
+    return (uint64_t) (long long int) (nSec/nSecPerTick);
 }

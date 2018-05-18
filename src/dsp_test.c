@@ -39,8 +39,6 @@ void _exit(int status);
 /******************************************************************************/
 
 int main(int argc, char *argv[]) {
-    printf("Hello world!\n");
-
     if (argc != 2) {
         printf("num of args used was %u\n", argc);
         printf("USAGE: dsp \"action-table-file\"\n");
@@ -62,7 +60,7 @@ int main(int argc, char *argv[]) {
 
     int execStatus = execActionTable(lines);
     if (execStatus < 0) {
-        printf("Failed to execute ActionTable (%i).\n", execstatus);
+        printf("Failed to execute ActionTable (%i).\n", execStatus);
         _exit(5);
     }
     printf("ActionTable executed.\n");
@@ -104,7 +102,6 @@ void maxPriority() {
 int execActionTable(long lines) {
     printf("executing ActionTable\n");
     long line = 0;
-    startARMTimer();
 
     printf("set time\n");
     uint64_t nextTime = 0;
@@ -115,15 +112,37 @@ int execActionTable(long lines) {
         actionLine actLine = actionTable[line];
         nextTime = startTime + actLine.clocks;
 
-        setNextTime(actLine.actionTime);
-
         if (actLine.action < 0) {
-            while (currentTime < nextTime) updateARMTimer();
-            while (!(*(actLine.pinAddr)& actLine.valToWrit)) {
-                //IT'S ADVENTURE TIME
+            int pinNum = actLine.pin;
+            int inputType = abs(actLine.action);
+            if (pinNum < 0 || pinNum > 15 || inputType > 3) {
+                printf("Error not expected at line %ld\n", line);
             }
-            updateCurrentTime();
+
+            volatile uint32_t * memAddr = getPinFunctionSelector(pinNum);
+
+            while (currentTime < nextTime) updateARMTimer();
+
+            int bitshift = (pinNum%10)*3;
+            *memAddr &= ~(7 << bitshift);
+
+            if (inputType == 3) {
+                if (*(actLine.pinAddr) & actLine.valToWrit) {
+                    inputType = 2;
+                } else {
+                    inputType = 1;
+                }
+            }
+
+            if (inputType == 1) {
+                while ((*(actLine.pinAddr) & actLine.valToWrit) == 0) { }
+            } else {
+                while ((*(actLine.pinAddr) & actLine.valToWrit) != 0) { }
+            }
+
+            updateARMTimer();
             startTime = currentTime;
+            *memAddr &= ~(1 << bitshift);
         } else {
             while (currentTime < nextTime) updateARMTimer();
             *(actLine.pinAddr) = actLine.valToWrit;
@@ -143,7 +162,6 @@ void sig_handler(int signo){
 
 void _exit(int status) {
     free(actionTable);
-    /*out_setpins_P(0); //TODO activate this (uncoment)
-    out_setpins_N(0);*/
+    exitGPIO();
     exit(status);
 }

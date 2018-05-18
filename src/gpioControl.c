@@ -26,20 +26,11 @@
 #include <unistd.h>
 #include <stdint.h>
 
-//#define PAGE_SIZE (4*1024)
 #define BLOCK_SIZE (4*1024)
-#define MAX_PIN 54
+#define MAX_PIN 28
 
 // I/O access
-volatile unsigned *gpio;
-
-// volatile uint32_t *toSendAddr;
-// uint32_t toSendValue;
-
-char pinsFunc[MAX_PIN];
-
-int sign9 = 1; //for signalChg9 function
-
+volatile uint32_t *gpio;
 
 int initGPIO() {
     int  mem_fd = open("/dev/mem", O_RDWR|O_SYNC); // open /dev/mem
@@ -65,145 +56,73 @@ int initGPIO() {
         return 1;
     }
 
+    //Before using pin as output mode(001), must be config to input mode(000)
+    // GPIO pins 00-09
+    gpio[GPIO_FUNCTION_SELECT_0] &= 0xC0000000;
+    gpio[GPIO_FUNCTION_SELECT_0] |= 0x09249249;
+    // GPIO pins 10-19
+    gpio[GPIO_FUNCTION_SELECT_1] &= 0xC0000000;
+    gpio[GPIO_FUNCTION_SELECT_1] |= 0x09249249;
+    // GPIO pins 20-27
+    gpio[GPIO_FUNCTION_SELECT_2] &= 0xFF000000;
+    gpio[GPIO_FUNCTION_SELECT_2] |= 0x00249249;
 
-    // prinfSTUFF();
-    //For testing, GPIO pin number 9 is going to be used
-
-    //Before using pin as output mode, must be config to input mode
-    //Changing the mode of pin 9 is in the address +0 (the values stored is 32bits)
-    //each 3 bits correspond to a pin (the last 2 bits are reseverd)
-
-    //Init intput in GPIO pin number 9
-    *(gpio+GPIO_FUNCTION_SEL_0) &= ~(7<<(9*3)); // change the bits 27-29 to input mode (000)
-
-    // prinfSTUFF();
-
-    //Init output in GPIO pin number 9
-    *(gpio+GPIO_FUNCTION_SEL_0) |= (1<<(9*3)); // change the bits 27-29 to output mode (001)
-
-    // prinfSTUFF();
+    // Clear all 28 pins
+    gpio[GPIO_OUTPUT_CLEAR] = 0x0FFFFFFF;
 
     return 0;
-}
-
-void initPinFunct() {
-    int i=0;
-    for(i=0; i<MAX_PIN; i++) {
-        if(pinsFunc[i] != 0) {
-            int addrOffset = GPIO_FUNCTION_SEL_0 + (i/10);
-            int valOffset = (i%10)*3;
-            *(gpio+addrOffset) &= ~(7<<valOffset);
-            if(pinsFunc[i] == 'O') {
-                *(gpio+addrOffset) |= (1<<valOffset);
-            }
-        }
-    }
 }
 
 int exitGPIO() {
-    *(gpio+GPIO_OUTPUT_CLEAR_0) = 0xffffffff;
-    *(gpio+GPIO_OUTPUT_CLEAR_1) = 0x003fffff;
+    gpio[GPIO_OUTPUT_CLEAR] = 0x0FFFFFFF;
     return 0;
 }
 
-void signal9(int i) { //send signal in pin 9 if i != 0, else clear it
-    if(i != 0) {
-        //To set a signal to pin 9, must change the 9th bit to 1 in the address +7
-        *(gpio+GPIO_OUTPUT_SET_0) = (1<<9);
+int setSignal(int pin, int action, volatile uint32_t **addr, uint32_t *val) {
+    int returnVal = 0;
+    if (pin<0) {
+        // reserved for analogue output, NOT IMPLEMENTED
+        printf("pin number was negative (%d)\n", pin);
+        return -1;
     } else {
-        //To clear a signal in pin 9, must change the 9th bit to 1 in the address +10
-        *(gpio+GPIO_OUTPUT_CLEAR_0) = (1<<9);
-    }
-}
-
-void signalON9() {
-    *(gpio+GPIO_OUTPUT_SET_0) = (1<<9);
-}
-
-void signalOFF9() {
-    *(gpio+GPIO_OUTPUT_CLEAR_0) = (1<<9);
-}
-
-void signalONAll() {
-    *(gpio+GPIO_OUTPUT_SET_0) = 0xffffffff;
-}
-
-void signalOFFAll() {
-    *(gpio+GPIO_OUTPUT_CLEAR_0) = 0xffffffff;
-}
-
-void signalChg9() {
-    if(sign9 != 0) {
-        //To set a signal to pin 9, must change the 9th bit to 1 in the address +7
-        *(gpio+GPIO_OUTPUT_SET_0) = (1<<9);
-        sign9 = 0;
-    } else {
-        //To clear a signal in pin 9, must change the 9th bit to 1 in the address +10
-        *(gpio+GPIO_OUTPUT_CLEAR_0) = (1<<9);
-        sign9 = 1;
-    }
-}
-
-
-void setSignal9(int i, volatile uint32_t **addr, uint32_t *val) {
-    if(i != 0) {
-        *addr = (gpio+GPIO_OUTPUT_SET_0);
-        *val = (1<<9);
-    } else {
-        *addr = (gpio+GPIO_OUTPUT_CLEAR_0);
-        *val = (1<<9);
-    }
-}
-
-void setSignal(int pin, int act, volatile uint32_t **addr, uint32_t *val) {
-
-    int GPIOoffset = 0;
-
-    if(act < 0){
-        pinsFunc[pin] = 'I'; //Input
-        GPIOoffset = GPIO_LEVEL_0;
-    } else {
-        pinsFunc[pin] = '0'; //Output
-        if(act != 0) {
-            GPIOoffset = GPIO_OUTPUT_SET_0;
-        } else {
-            GPIOoffset = GPIO_OUTPUT_CLEAR_0;
+        if (pin > MAX_PIN) {
+            printf("pin was bigger than %d (%d)", MAX_PIN, pin);
+            return -1;
         }
+
+        if (action < 0) {
+            // input - TODO use GPIO Event Detect Status Registers
+            // action -1 = wait for signal to be 1
+            // action -2 = wait for signal to be 0
+            // action -3 = wait for edge
+            if (action < -3) {
+                printf("WARNING! Action was %i. Digital input action should be -1, -2 or -3 (-3 apply by default)\n", action);
+                action = -3;
+                returnVal = 1;
+            }
+            *addr = &gpio[GPIO_LEVEL];
+        } else {
+            // output
+            // action 0 = clear pin
+            // action 1 = set pin
+            if (action > 1) {
+                printf("WARNING! Action was %i. Digital output action should be 1 or 0 (1 apply by default)\n", action);
+                action = 1;
+                returnVal = 1;
+            }
+            if (action) {
+                *addr = &gpio[GPIO_OUTPUT_SET];
+            } else {
+                *addr = &gpio[GPIO_OUTPUT_CLEAR];
+            }
+        }
+        *val = (1<<pin);
     }
 
-    if(pin > 31) {
-        pin -= 32;
-        GPIOoffset++;
-    }
-    *addr = (gpio+GPIOoffset);
-    *val = (1<<pin);
+    return returnVal;
 }
 
-/*void setToSend(uint32_t *addr, uint32_t val) {
-    toSendAddr = addr;
-    toSendValue = val;
-}
-
-inline void useToSend() {
-    *(toSendAddr) = toSendValue;
-}*/
-
-void prinfSTUFF() {
-    printf("Printing functionSel outputset outputclear\n");
-    printFuncSel(); printOutSet(); printOutClr();
-}
-
-void printFuncSel() {
-    int val = *(gpio+GPIO_FUNCTION_SEL_0);
-    printf("%x\n", val);
-}
-
-void printOutSet() {
-    int val = *(gpio+GPIO_OUTPUT_SET_0);
-    printf("%x\n", val);
-}
-
-void printOutClr() {
-    int val = *(gpio+GPIO_OUTPUT_CLEAR_0);
-    printf("%x\n", val);
+volatile uint32_t * getPinFunctionSelector(int pinNumber) {
+    int offset = pinNumber/10;
+    return (volatile uint32_t *) &gpio[GPIO_FUNCTION_SELECT+offset];
 }

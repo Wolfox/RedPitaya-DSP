@@ -117,21 +117,23 @@ int readActionLine(char *line, long lineNum) {
         return -1;
     }
 
-    actionTable[lineno].nsec = strtoull(nstime_s, NULL, 10);
+    actionTable[lineNum].nsec = strtoull(nstime_s, NULL, 10);
     actionTable[lineNum].pin = atoi(pin_s);
     actionTable[lineNum].action = atoi(act_s);
 
-    actionTable[lineNum].clocks = turnNSecToTicks(strtoull(nstime_s, NULL, 10));
+    actionTable[lineNum].clocks = turnNSecToTicks(actionTable[lineNum].nsec);
 
-    setSignal(actionTable[lineNum].pin, actionTable[lineNum].action, &actionTable[lineNum].pinAddr, &actionTable[lineNum].valToWrit);
-    actionTable[lineNum].executedTime = 0;
+    setSignal(actionTable[lineNum].pin, actionTable[lineNum].action,
+        &actionTable[lineNum].pinAddr, &actionTable[lineNum].valToWrit);
+    // actionTable[lineNum].executedTime = 0;
 
     if(PRINT_READ_LINES) {
         printf("row:%lu time:%llu pin:%i (@0x%p) action:%i (0x%08x)",
             lineNum, // row
-            (unsigned long long int) actionTable[lineNum].clocks, // time
-            actionTable[lineNum].pin, actionTable[lineNum].pinAddr, // pinNum & pin address
-            actionTable[lineNum].action, (unsigned int)actionTable[lineNum].valToWrit); // action value & value to write in the pin address (pinAddr)
+            (unsigned long long int) actionTable[lineNum].clocks,
+            actionTable[lineNum].pin, actionTable[lineNum].pinAddr,
+            actionTable[lineNum].action,
+            (unsigned int)actionTable[lineNum].valToWrit);
     }
     return 0;
 }

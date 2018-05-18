@@ -43,12 +43,11 @@ typedef struct {
     int pin;
     int action;
     uint64_t clocks;
-    volatile uint32_t * actAddr;
-    uint32_t actVal;
+    volatile uint32_t * pinAddr;
+    uint32_t valToWrit;
     // unsigned uint64_t executedTime;
 } actionLine;
 
 actionLine *actionTable;
-// long int numberOfLines;
 
 long createActionTable(char *path);
